@@ -32,7 +32,7 @@ var getAccessToken = function(req, res, next) {
 	} else if (req.query && req.query.access_token) {
 		inToken = req.query.access_token
 	}
-	
+
 	console.log('Incoming token: %s', inToken);
 	nosql.one().make(function(builder) {
 	  builder.where('access_token', inToken);
@@ -63,25 +63,53 @@ app.get('/words', getAccessToken, requireAccessToken, function(req, res) {
 	/*
 	 * Make this function require the "read" scope
 	 */
-	res.json({words: savedWords.join(' '), timestamp: Date.now()});
+	if (__.contains(req.access_token.scope, 'read')) {
+		res.json({
+			words: savedWords.join(' '),
+			timestamp: Date.now()
+		});
+	} else {
+		res.set('WWW-Authenticate', 'Bearer realm=localhost:9002, error="insufficient_scope", scope="read"');
+		res.status(403).end();
+	}
+
+	// res.json({words: savedWords.join(' '), timestamp: Date.now()});
 });
 
 app.post('/words', getAccessToken, requireAccessToken, function(req, res) {
 	/*
 	 * Make this function require the "write" scope
 	 */
-	if (req.body.word) {
-		savedWords.push(req.body.word);
+	if (__.contains(req.access_token.scope, 'write')) {
+		if (req.body.word) {
+			savedWords.push(req.body.word);
+		}
+		res.status(201).end();
+	} else {
+		res.set('WWW-Authenticate', 'Bearer realm-localhost:9002, error="insufficient_scope", scope="write"');
+		res.status(403).end();
 	}
-	res.status(201).end();
+
+	// if (req.body.word) {
+	// 	savedWords.push(req.body.word);
+	// }
+	// res.status(201).end();
 });
 
 app.delete('/words', getAccessToken, requireAccessToken, function(req, res) {
 	/*
 	 * Make this function require the "delete" scope
 	 */
-	savedWords.pop();
-	res.status(204).end();
+	if (__.contains(req.access_token.scope, 'delete')) {
+		savedWords.pop();
+		res.status(204).end();
+	} else {
+		res.set('WWW-Authenticate', 'Bearer realm=localhost:9002, error="insufficient_scope", scope="delete"');
+		res.status(403).end();
+	}
+
+	// savedWords.pop();
+	// res.status(204).end();
 });
 
 var server = app.listen(9002, 'localhost', function () {
@@ -90,4 +118,4 @@ var server = app.listen(9002, 'localhost', function () {
 
   console.log('OAuth Resource Server is listening at http://%s:%s', host, port);
 });
- 
+
