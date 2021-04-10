@@ -55,11 +55,40 @@ app.get('/authorize', function(req, res) {
 });
 
 app.post('/username_password', function(req, res) {
+	var username = req.body.username;
+	var password = req.body.password;
 
-	/*
-	 * Implement the resource owner grant type here
-	 */
+	var form_data = qs.stringify({
+		grant_type: 'password',
+		username: username,
+		password: password,
+		scope: client.scope
+	});
 
+	var headers = {
+		'Content-Type': 'application/x-www-form-urlencoded',
+		'Authorization': 'Basic ' + encodeClientCredentials(client.client_id, client.client_secret)
+	};
+
+	var tokRes = request('POST', authServer.tokenEndpoint, {
+		body: form_data,
+		headers: headers
+	});
+
+	if (tokRes.statusCode >= 200 && tokRes.statusCode < 300) {
+		var body = JSON.parse(tokRes.getBody());
+		access_token = body.access_token;
+		scope = body.scope;
+		res.render('index', {
+			access_token: access_token,
+			refresh_token: refresh_token,
+			scope: scope
+		});
+	} else {
+		res.render('error', {
+			error: 'Unable to fetch access token, server response: ' + tokRes.statusCode
+		});
+	}
 });
 
 app.get('/fetch_resource', function(req, res) {
@@ -68,18 +97,18 @@ app.get('/fetch_resource', function(req, res) {
 		res.render('error', {error: 'Missing access token.'});
 		return;
 	}
-	
+
 	console.log('Making request with access token %s', access_token);
-	
+
 	var headers = {
 		'Authorization': 'Bearer ' + access_token,
 		'Content-Type': 'application/x-www-form-urlencoded'
 	};
-	
+
 	var resource = request('POST', protectedResource,
 		{headers: headers}
 	);
-	
+
 	if (resource.statusCode >= 200 && resource.statusCode < 300) {
 		var body = JSON.parse(resource.getBody());
 		res.render('data', {resource: body});
@@ -89,7 +118,7 @@ app.get('/fetch_resource', function(req, res) {
 		res.render('error', {error: 'Server returned response code: ' + resource.statusCode});
 		return;
 	}
-	
+
 });
 
 var encodeClientCredentials = function(clientId, clientSecret) {
@@ -103,4 +132,4 @@ var server = app.listen(9000, 'localhost', function () {
   var port = server.address().port;
   console.log('OAuth Client is listening at http://%s:%s', host, port);
 });
- 
+
